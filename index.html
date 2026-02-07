@@ -84,7 +84,7 @@ document.getElementById("connect").onclick = () => {
     connectTimeout: 8000
   });
 
-  client.on("connect", () => { log("Connected ✅"); setEnabled(true); });
+  client.on("connect", () => { log("✅ Connected"); setEnabled(true); });
   client.on("reconnect", () => log("Reconnecting..."));
   client.on("close", () => { log("Closed"); setEnabled(false); });
   client.on("offline", () => { log("Offline"); setEnabled(false); });
@@ -107,18 +107,33 @@ if(rec){
   rec.interimResults = false;
 
   rec.onresult = (e) => {
-    const text = e.results[0][0].transcript.trim();
+    const text = (e.results[0][0].transcript || "").trim();
     log("Heard: " + text);
 
     let msg = "";
-    if (/(start|ستارت|ابدأ|تشغيل)/i.test(text)) msg = "START";
-    else if (/(stop|ستوب|ايقاف|إيقاف|وقف)/i.test(text)) msg = "STOP";
-    else {
-      const m = text.match(/(حرارة|temperature|temp)\s*([0-9]+(\.[0-9]+)?)/i);
-      if (m) msg = "TEMPERATURE:" + Number(m[2]);
+
+    if (/(start|ستارت|ابدأ|تشغيل)/i.test(text)) {
+      msg = "START";
+    } else if (/(stop|ستوب|ايقاف|إيقاف|وقف)/i.test(text)) {
+      msg = "STOP";
+    } else {
+      const re1 = /(حرارة|temperature|temp|تيمبراتشر|تمبراتشر|تمب)\s*[:：]?\s*([0-9]+(\.[0-9]+)?)/i;   // حرارة 25
+      const re2 = /([0-9]+(\.[0-9]+)?)\s*(حرارة|temperature|temp|تيمبراتشر|تمبراتشر|تمب)/i;           // 25 حرارة
+
+      let m = text.match(re1);
+      if (!m) m = text.match(re2);
+
+      if (m) {
+        const val = (m[2] || m[1]);
+        msg = "TEMPERATURE:" + val;
+      }
     }
 
-    if(!msg){ log("لم أفهم الأمر"); return; }
+    if(!msg){
+      log("لم أفهم الأمر");
+      return;
+    }
+
     publish(msg);
   };
 
