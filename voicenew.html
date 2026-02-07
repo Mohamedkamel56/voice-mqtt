@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Voice + Manual MQTT</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+</head>
+<body style="font-family:system-ui;padding:16px">
+
+<h3>إرسال أوامر (يدوي + صوت) إلى HiveMQ</h3>
+
+<label>WebSocket URL</label>
+<input id="ws" style="width:100%;padding:10px;font-size:16px"
+ value="wss://89d30411a3a74f3db35058e1999cb215.s1.eu.hivemq.cloud:8884/mqtt">
+
+<label>Topic</label>
+<input id="topic" style="width:100%;padding:10px;font-size:16px" value="PLC">
+
+<label>Username</label>
+<input id="user" style="width:100%;padding:10px;font-size:16px" value="mohamedkanel">
+
+<label>Password</label>
+<input id="pass" type="password" style="width:100%;padding:10px;font-size:16px" value="WWEwwe123">
+
+<div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+  <button id="connect" style="padding:12px 16px;font-size:18px">🔌 اتصال</button>
+  <button id="startBtn" disabled style="padding:12px 16px;font-size:18px">START</button>
+  <button id="stopBtn" disabled style="padding:12px 16px;font-size:18px">STOP</button>
+</div>
+
+<div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+  <input id="temp" placeholder="Temp مثال: 25" style="flex:1;min-width:160px;padding:10px;font-size:16px">
+  <button id="tempBtn" disabled style="padding:12px 16px;font-size:18px">Send TEMP</button>
+</div>
+
+<div style="margin-top:10px">
+  <button id="rec" disabled style="padding:12px 16px;font-size:18px">🎤 تسجيل صوت</button>
+</div>
+
+<pre id="log" style="background:#f6f6f6;padding:12px;border-radius:10px;margin-top:12px;white-space:pre-wrap"></pre>
+
+<script>
+let client = null;
+
+const logEl = document.getElementById("log");
+const wsEl = document.getElementById("ws");
+const topicEl = document.getElementById("topic");
+const userEl = document.getElementById("user");
+const passEl = document.getElementById("pass");
+
+function log(s){ logEl.textContent += s + "\n"; }
+
+function setEnabled(on){
+  document.getElementById("startBtn").disabled = !on;
+  document.getElementById("stopBtn").disabled  = !on;
+  document.getElementById("tempBtn").disabled  = !on;
+  document.getElementById("rec").disabled      = !on;
+}
+
+function publish(msg){
+  if(!client || !client.connected){
+    log("Not connected");
+    return;
+  }
+  const t = topicEl.value.trim();
+  client.publish(t, msg, {qos:0}, (err)=>{
+    if(err) log("Publish error: " + err.message);
+    else log("Sent: " + msg);
+  });
+}
+
+document.getElementById("connect").onclick = () => {
+  logEl.textContent = "";
+  const url = wsEl.value.trim();
+  log("Connecting to: " + url);
+
+  client = mqtt.connect(url, {
+    username: userEl.value,
+    password: passEl.value,
+    clientId: "mobile_" + Math.random().toString(16).slice(2),
+    clean: true,
+    reconnectPeriod: 2000,
+    connectTimeout: 8000
+  });
+
+  client.on("connect", () => { log("Connected ✅"); setEnabled(true); });
+  client.on("reconnect", () => log("Reconnecting..."));
+  client.on("close", () => { log("Closed"); setEnabled(false); });
+  client.on("offline", () => { log("Offline"); setEnabled(false); });
+  client.on("error", (e) => log("Error: " + e.message));
+};
+
+document.getElementById("startBtn").onclick = () => publish("START");
+document.getElementById("stopBtn").onclick  = () => publish("STOP");
+document.getElementById("tempBtn").onclick  = () => {
+  const v = document.getElementById("temp").value.trim();
+  if(!v || isNaN(Number(v))) { alert("اكتب رقم صحيح"); return; }
+  publish("TEMPERATURE:" + Number(v));
+};
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const rec = SpeechRecognition ? new SpeechRecognition() : null;
+
+if(rec){
+  rec.lang = "ar-EG";
+  rec.interimResults = false;
+
+  rec.onresult = (e) => {
+    const text = e.results[0][0].transcript.trim();
+    log("Heard: " + text);
+
+    let msg = "";
+    if (/(start|ستارت|ابدأ|تشغيل)/i.test(text)) msg = "START";
+    else if (/(stop|ستوب|ايقاف|إيقاف|وقف)/i.test(text)) msg = "STOP";
+    else {
+      const m = text.match(/(حرارة|temperature|temp)\s*([0-9]+(\.[0-9]+)?)/i);
+      if (m) msg = "TEMPERATURE:" + Number(m[2]);
+    }
+
+    if(!msg){ log("لم أفهم الأمر"); return; }
+    publish(msg);
+  };
+
+  rec.onerror = (e) => log("Speech error: " + e.error);
+}
+
+document.getElementById("rec").onclick = () => {
+  if(!rec){ alert("المتصفح لا يدعم التعرف على الصوت"); return; }
+  rec.start();
+};
+</script>
+
+</body>
+</html>
