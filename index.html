@@ -103,7 +103,7 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 const rec = SpeechRecognition ? new SpeechRecognition() : null;
 
 if(rec){
-  rec.lang = "ar-EG";
+  rec.lang = "en-US";
   rec.interimResults = false;
 
   rec.onresult = (e) => {
@@ -133,3 +133,4 @@ document.getElementById("rec").onclick = () => {
 
 </body>
 </html>
+
